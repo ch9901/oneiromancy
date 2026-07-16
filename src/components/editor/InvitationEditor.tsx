@@ -1,6 +1,23 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { DayPicker } from "react-day-picker";
 import { ko } from "react-day-picker/locale";
 import "react-day-picker/style.css";
@@ -57,6 +74,97 @@ function Chevron({ open }: { open: boolean }) {
     >
       <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/* ---------- 드래그 가능한 섹션 행 ---------- */
+
+function SortableSectionRow({
+  section,
+  open,
+  onToggleOpen,
+  onToggleEnabled,
+  children,
+}: {
+  section: Section;
+  open: boolean;
+  onToggleOpen: () => void;
+  onToggleEnabled: () => void;
+  children: ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: section.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={`rounded-xl border bg-white ${
+        isDragging
+          ? "z-10 border-rose-300 shadow-lg"
+          : "border-stone-200"
+      }`}
+    >
+      <div className="flex w-full items-center gap-2 px-3 py-3">
+        {/* 드래그 핸들 */}
+        <button
+          type="button"
+          aria-label={`${SECTION_TITLES[section.type]} 순서 이동`}
+          {...attributes}
+          {...listeners}
+          className="shrink-0 cursor-grab touch-none rounded-md p-1.5 text-stone-300 transition hover:bg-stone-100 hover:text-stone-500 active:cursor-grabbing"
+        >
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor" aria-hidden>
+            <circle cx="7" cy="4" r="1.5" />
+            <circle cx="13" cy="4" r="1.5" />
+            <circle cx="7" cy="10" r="1.5" />
+            <circle cx="13" cy="10" r="1.5" />
+            <circle cx="7" cy="16" r="1.5" />
+            <circle cx="13" cy="16" r="1.5" />
+          </svg>
+        </button>
+
+        {/* 온오프 스위치 */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={section.enabled}
+          onClick={onToggleEnabled}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+            section.enabled ? "bg-rose-400" : "bg-stone-200"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+              section.enabled ? "left-[1.375rem]" : "left-0.5"
+            }`}
+          />
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          className="flex flex-1 items-center justify-between text-left"
+        >
+          <span
+            className={`font-medium ${section.enabled ? "text-stone-800" : "text-stone-400"}`}
+          >
+            {SECTION_TITLES[section.type]}
+          </span>
+          <Chevron open={open} />
+        </button>
+      </div>
+      {open && <div className="border-t border-stone-100 px-4 py-4">{children}</div>}
+    </div>
   );
 }
 
@@ -151,12 +259,19 @@ export function InvitationEditor({
     [groomName, brideName, weddingAtValue, venueName, venueAddress],
   );
 
-  const moveSection = (index: number, delta: -1 | 1) => {
-    const next = index + delta;
-    if (next < 0 || next >= sections.length) return;
-    const copy = [...sections];
-    [copy[index], copy[next]] = [copy[next], copy[index]];
-    setSections(copy);
+  const sensors = useSensors(
+    // distance 제약: 클릭(토글/펼침)과 드래그를 구분한다
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    setSections((prev) => {
+      const from = prev.findIndex((s) => s.id === active.id);
+      const to = prev.findIndex((s) => s.id === over.id);
+      return arrayMove(prev, from, to);
+    });
   };
 
   const patchSection = (id: string, patch: Partial<Pick<Section, "enabled" | "data">>) => {
@@ -405,75 +520,38 @@ export function InvitationEditor({
             청첩장 구성 · 순서를 바꾸고 켜고 끌 수 있어요
           </p>
 
-          {sections.map((section, index) => {
-            const open = openSectionId === section.id;
-            return (
-              <div key={section.id} className="rounded-xl border border-stone-200 bg-white">
-                <div className="flex w-full items-center gap-2 px-3 py-3">
-                  {/* 순서변경 */}
-                  <div className="flex flex-col">
-                    <button
-                      type="button"
-                      onClick={() => moveSection(index, -1)}
-                      disabled={index === 0}
-                      aria-label="위로"
-                      className="px-1 text-stone-300 transition enabled:hover:text-stone-600 disabled:opacity-30"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveSection(index, 1)}
-                      disabled={index === sections.length - 1}
-                      aria-label="아래로"
-                      className="px-1 text-stone-300 transition enabled:hover:text-stone-600 disabled:opacity-30"
-                    >
-                      ▼
-                    </button>
-                  </div>
-
-                  {/* 온오프 스위치 */}
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={section.enabled}
-                    onClick={() => patchSection(section.id, { enabled: !section.enabled })}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                      section.enabled ? "bg-rose-400" : "bg-stone-200"
-                    }`}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={sections.map((s) => s.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-3">
+                {sections.map((section) => (
+                  <SortableSectionRow
+                    key={section.id}
+                    section={section}
+                    open={openSectionId === section.id}
+                    onToggleOpen={() =>
+                      setOpenSectionId(openSectionId === section.id ? null : section.id)
+                    }
+                    onToggleEnabled={() =>
+                      patchSection(section.id, { enabled: !section.enabled })
+                    }
                   >
-                    <span
-                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
-                        section.enabled ? "left-[1.375rem]" : "left-0.5"
-                      }`}
-                    />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setOpenSectionId(open ? null : section.id)}
-                    className="flex flex-1 items-center justify-between text-left"
-                  >
-                    <span
-                      className={`font-medium ${section.enabled ? "text-stone-800" : "text-stone-400"}`}
-                    >
-                      {SECTION_TITLES[section.type]}
-                    </span>
-                    <Chevron open={open} />
-                  </button>
-                </div>
-                {open && (
-                  <div className="border-t border-stone-100 px-4 py-4">
                     <SectionEditor
                       section={section}
                       labels={settings.labels}
                       onChange={(data) => patchSection(section.id, { data })}
                     />
-                  </div>
-                )}
+                  </SortableSectionRow>
+                ))}
               </div>
-            );
-          })}
+            </SortableContext>
+          </DndContext>
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
