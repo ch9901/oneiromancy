@@ -32,7 +32,8 @@ export default async function NewInvitationPage({
           새 청첩장 만들기
         </h1>
         <p className="mt-1 text-sm text-stone-500">
-          기본 정보만 입력하면 시작할 수 있어요. 나머지는 나중에 채워도 됩니다.
+          이름과 주소만 정하면 바로 시작할 수 있어요. 예식 정보는 에디터에서
+          채웁니다.
         </p>
       </header>
 
@@ -80,40 +81,6 @@ export default async function NewInvitationPage({
             영문 소문자·숫자·하이픈(-)만, 3~50자. 나중에 바꿀 수 있어요.
           </span>
         </label>
-
-        <label className="block">
-          <span className={labelClass}>
-            예식 일시 <span className="font-normal text-stone-400">(선택)</span>
-          </span>
-          <input name="wedding_at" type="datetime-local" className={inputClass} />
-        </label>
-
-        <div className="grid grid-cols-1 gap-3">
-          <label className="block">
-            <span className={labelClass}>
-              예식장 이름{" "}
-              <span className="font-normal text-stone-400">(선택)</span>
-            </span>
-            <input
-              name="venue_name"
-              maxLength={50}
-              placeholder="메종 드 플뢰르 2층 그랜드홀"
-              className={inputClass}
-            />
-          </label>
-          <label className="block">
-            <span className={labelClass}>
-              예식장 주소{" "}
-              <span className="font-normal text-stone-400">(선택)</span>
-            </span>
-            <input
-              name="venue_address"
-              maxLength={100}
-              placeholder="서울시 강남구 ..."
-              className={inputClass}
-            />
-          </label>
-        </div>
 
         {error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

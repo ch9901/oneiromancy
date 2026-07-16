@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signout } from "@/app/login/actions";
-import { formatWeddingAt } from "@/lib/invitation";
+import { formatWeddingAt } from "@/lib/datetime";
 import type { Invitation } from "@/lib/types";
 
 export const metadata: Metadata = {

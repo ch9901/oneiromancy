@@ -3,11 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import {
-  invitationSchema,
-  slugErrorMessage,
-  toKstIso,
-} from "@/lib/invitation";
+import { invitationSchema, slugErrorMessage } from "@/lib/invitation";
+import { toKstIso } from "@/lib/datetime";
 
 async function requireUser() {
   const supabase = await createClient();

@@ -20,43 +20,6 @@ export const invitationSchema = z.object({
   greeting: z.string().trim().max(500).optional(),
 });
 
-/**
- * <input type="datetime-local"> 값("2026-10-24T12:00")을
- * KST 오프셋이 붙은 ISO 문자열로 바꾼다. 빈 값이면 null.
- */
-export function toKstIso(value: string | undefined): string | null {
-  if (!value) return null;
-  return `${value}:00+09:00`;
-}
-
-/** 저장된 timestamptz 를 datetime-local 입력값(KST 기준)으로 변환 */
-export function toDateTimeLocal(iso: string | null): string {
-  if (!iso) return "";
-  const formatted = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
-  return formatted.replace(" ", "T");
-}
-
-/** 공개 페이지 등에 보여줄 한국어 일시 문자열 */
-export function formatWeddingAt(iso: string | null): string | null {
-  if (!iso) return null;
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    weekday: "long",
-    hour: "numeric",
-    minute: "numeric",
-  }).format(new Date(iso));
-}
-
 /** Postgres 에러 코드를 사용자 메시지로 변환 */
 export function slugErrorMessage(code: string | undefined): string | null {
   if (code === "23505") return "이미 사용 중인 주소입니다. 다른 주소를 골라주세요.";
