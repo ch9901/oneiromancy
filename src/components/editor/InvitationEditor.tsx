@@ -11,68 +11,56 @@ import {
   updateInvitation,
 } from "@/app/dashboard/actions";
 import { InvitationView } from "@/components/invitation/InvitationView";
+import { SectionEditor } from "@/components/editor/SectionEditors";
+import { SECTION_TITLES, type Section, type WeddingContent } from "@/lib/sections";
 import type { Invitation } from "@/lib/types";
 
 const inputClass =
   "w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-stone-900 placeholder:text-stone-400 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100";
 const labelClass = "mb-1 block text-sm font-medium text-stone-700";
 
-/* ---------- 아코디언 섹션 ---------- */
+/* ---------- 접이식 카드 (핵심 정보용) ---------- */
 
-interface SectionProps {
+function Card({
+  title,
+  defaultOpen = false,
+  children,
+}: {
   title: string;
   defaultOpen?: boolean;
-  /** 값이 주어지면 헤더 왼쪽에 온오프 스위치가 붙는다 */
-  toggle?: { checked: boolean; onChange: (next: boolean) => void };
   children: ReactNode;
-}
-
-function Section({ title, defaultOpen = false, toggle, children }: SectionProps) {
+}) {
   const [open, setOpen] = useState(defaultOpen);
-
   return (
     <div className="rounded-xl border border-stone-200 bg-white">
-      <div className="flex w-full items-center gap-3 px-4 py-3.5">
-        {toggle && (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={toggle.checked}
-            onClick={() => toggle.onChange(!toggle.checked)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-              toggle.checked ? "bg-rose-400" : "bg-stone-200"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
-                toggle.checked ? "left-[1.375rem]" : "left-0.5"
-              }`}
-            />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex flex-1 items-center justify-between text-left"
-        >
-          <span className="font-medium text-stone-800">{title}</span>
-          <svg
-            viewBox="0 0 20 20"
-            className={`h-5 w-5 text-stone-400 transition-transform ${open ? "rotate-180" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3.5 text-left"
+      >
+        <span className="font-medium text-stone-800">{title}</span>
+        <Chevron open={open} />
+      </button>
       {open && <div className="border-t border-stone-100 px-4 py-4">{children}</div>}
     </div>
   );
 }
 
-/* ---------- 예식 일시 상태 ---------- */
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className={`h-5 w-5 shrink-0 text-stone-400 transition-transform ${open ? "rotate-180" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <path d="M5 7.5 10 12.5 15 7.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* ---------- 예식 일시 유틸 ---------- */
 
 function parseWeddingAt(iso: string | null): {
   date: Date | undefined;
@@ -87,7 +75,7 @@ function parseWeddingAt(iso: string | null): {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(iso)); // "2026-10-24 12:00"
+  }).format(new Date(iso));
   const [datePart, timePart] = parts.split(" ");
   const [y, m, d] = datePart.split("-").map(Number);
   const [hh, mm] = timePart.split(":").map(Number);
@@ -113,6 +101,7 @@ function hourLabel(hour: number): string {
 
 interface InvitationEditorProps {
   invitation: Invitation;
+  content: WeddingContent;
   publicUrl: string;
   error?: string;
   saved?: boolean;
@@ -120,12 +109,14 @@ interface InvitationEditorProps {
 
 export function InvitationEditor({
   invitation,
+  content: initialContent,
   publicUrl,
   error,
   saved,
 }: InvitationEditorProps) {
   const initial = parseWeddingAt(invitation.wedding_at);
 
+  // 핵심 컬럼
   const [groomName, setGroomName] = useState(invitation.groom_name);
   const [brideName, setBrideName] = useState(invitation.bride_name);
   const [slug, setSlug] = useState(invitation.slug);
@@ -134,27 +125,45 @@ export function InvitationEditor({
   const [minute, setMinute] = useState(initial.minute);
   const [venueName, setVenueName] = useState(invitation.venue_name ?? "");
   const [venueAddress, setVenueAddress] = useState(invitation.venue_address ?? "");
-  const [greeting, setGreeting] = useState(invitation.greeting ?? "");
-  const [guestbook, setGuestbook] = useState(invitation.features.guestbook);
-  const [rsvp, setRsvp] = useState(invitation.features.rsvp);
   const [postcodeOpen, setPostcodeOpen] = useState(false);
+
+  // 섹션 구조
+  const [sections, setSections] = useState<Section[]>(initialContent.sections);
+  const [settings, setSettings] = useState(initialContent.settings);
+  const [openSectionId, setOpenSectionId] = useState<string | null>(null);
 
   const isPublished = invitation.status === "published";
   const weddingAtValue = toLocalInputValue(date, hour, minute);
 
-  /** 미리보기에 넘길 실시간 데이터 */
-  const preview = useMemo(
-    () => ({
-      groom_name: groomName,
-      bride_name: brideName,
-      wedding_at: weddingAtValue ? `${weddingAtValue}:00+09:00` : null,
-      venue_name: venueName || null,
-      venue_address: venueAddress || null,
-      greeting: greeting || null,
-      features: { guestbook, rsvp },
-    }),
-    [groomName, brideName, weddingAtValue, venueName, venueAddress, greeting, guestbook, rsvp],
+  const content: WeddingContent = useMemo(
+    () => ({ version: 1, settings, sections }),
+    [settings, sections],
   );
+
+  const previewCore = useMemo(
+    () => ({
+      groomName,
+      brideName,
+      weddingAt: weddingAtValue ? `${weddingAtValue}:00+09:00` : null,
+      venueName: venueName || null,
+      venueAddress: venueAddress || null,
+    }),
+    [groomName, brideName, weddingAtValue, venueName, venueAddress],
+  );
+
+  const moveSection = (index: number, delta: -1 | 1) => {
+    const next = index + delta;
+    if (next < 0 || next >= sections.length) return;
+    const copy = [...sections];
+    [copy[index], copy[next]] = [copy[next], copy[index]];
+    setSections(copy);
+  };
+
+  const patchSection = (id: string, patch: Partial<Pick<Section, "enabled" | "data">>) => {
+    setSections((prev) =>
+      prev.map((s) => (s.id === id ? ({ ...s, ...patch } as Section) : s)),
+    );
+  };
 
   const handleAddressComplete = (address: Address) => {
     const road = address.roadAddress || address.address;
@@ -170,7 +179,7 @@ export function InvitationEditor({
         <div className="sticky top-8">
           <div className="mx-auto w-[330px] overflow-hidden rounded-[2.2rem] border-8 border-stone-800 bg-white shadow-2xl">
             <div className="h-[640px] overflow-y-auto">
-              <InvitationView invitation={preview} />
+              <InvitationView core={previewCore} content={content} />
             </div>
           </div>
           <p className="mt-3 text-center text-xs text-stone-400">
@@ -210,11 +219,7 @@ export function InvitationEditor({
             </div>
             <form action={setInvitationStatus} className="shrink-0">
               <input type="hidden" name="id" value={invitation.id} />
-              <input
-                type="hidden"
-                name="status"
-                value={isPublished ? "draft" : "published"}
-              />
+              <input type="hidden" name="status" value={isPublished ? "draft" : "published"} />
               <button
                 className={
                   isPublished
@@ -232,15 +237,14 @@ export function InvitationEditor({
           <input type="hidden" name="id" value={invitation.id} />
           <input type="hidden" name="wedding_at" value={weddingAtValue} />
           <input type="hidden" name="venue_address" value={venueAddress} />
-          {guestbook && <input type="hidden" name="feature_guestbook" value="on" />}
-          {rsvp && <input type="hidden" name="feature_rsvp" value="on" />}
+          <input type="hidden" name="content" value={JSON.stringify(content)} />
 
-          {/* 기본 정보 */}
-          <Section title="기본 정보" defaultOpen>
+          {/* ----- 핵심 정보 ----- */}
+          <Card title="기본 정보" defaultOpen>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className={labelClass}>신랑 이름</span>
+                  <span className={labelClass}>{settings.labels.groom} 이름</span>
                   <input
                     name="groom_name"
                     required
@@ -251,7 +255,7 @@ export function InvitationEditor({
                   />
                 </label>
                 <label className="block">
-                  <span className={labelClass}>신부 이름</span>
+                  <span className={labelClass}>{settings.labels.bride} 이름</span>
                   <input
                     name="bride_name"
                     required
@@ -284,10 +288,9 @@ export function InvitationEditor({
                 )}
               </label>
             </div>
-          </Section>
+          </Card>
 
-          {/* 예식 일시 */}
-          <Section title="예식 일시" defaultOpen>
+          <Card title="예식 일시">
             <div className="flex flex-col items-center gap-4">
               <DayPicker
                 mode="single"
@@ -333,10 +336,9 @@ export function InvitationEditor({
                 </button>
               )}
             </div>
-          </Section>
+          </Card>
 
-          {/* 예식장 */}
-          <Section title="예식장" defaultOpen>
+          <Card title="예식장">
             <div className="space-y-3">
               <label className="block">
                 <span className={labelClass}>예식장 이름</span>
@@ -366,47 +368,112 @@ export function InvitationEditor({
                     주소 검색
                   </button>
                 </div>
-                {venueAddress && (
-                  <button
-                    type="button"
-                    onClick={() => setVenueAddress("")}
-                    className="mt-1 text-xs text-stone-400 underline underline-offset-2 hover:text-stone-600"
-                  >
-                    주소 지우기
-                  </button>
-                )}
               </div>
             </div>
-          </Section>
+          </Card>
 
-          {/* 인사말 */}
-          <Section title="인사말">
-            <textarea
-              name="greeting"
-              rows={6}
-              maxLength={500}
-              value={greeting}
-              onChange={(e) => setGreeting(e.target.value)}
-              placeholder={"저희 두 사람이 사랑과 믿음으로\n한 가정을 이루게 되었습니다..."}
-              className={inputClass}
-            />
-          </Section>
+          <Card title="신랑·신부·혼주 명칭변경">
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  ["groom", "신랑 명칭"],
+                  ["bride", "신부 명칭"],
+                  ["groomParents", "신랑측 혼주 명칭"],
+                  ["brideParents", "신부측 혼주 명칭"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="block">
+                  <span className={labelClass}>{label}</span>
+                  <input
+                    value={settings.labels[key]}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        labels: { ...settings.labels, [key]: e.target.value },
+                      })
+                    }
+                    maxLength={10}
+                    className={inputClass}
+                  />
+                </label>
+              ))}
+            </div>
+          </Card>
 
-          {/* 하객 참여 기능: 헤더에 토글 */}
-          <Section
-            title="방명록"
-            toggle={{ checked: guestbook, onChange: setGuestbook }}
-          >
-            <p className="text-sm text-stone-500">
-              하객이 청첩장에서 축하 인사를 남길 수 있어요. 끄면 방명록 섹션이
-              보이지 않아요.
-            </p>
-          </Section>
-          <Section title="참석 여부 회신 (RSVP)" toggle={{ checked: rsvp, onChange: setRsvp }}>
-            <p className="text-sm text-stone-500">
-              참석 인원과 식사 여부를 미리 받아 집계할 수 있어요.
-            </p>
-          </Section>
+          {/* ----- 섹션 목록 ----- */}
+          <p className="pt-3 text-sm font-medium text-stone-500">
+            청첩장 구성 · 순서를 바꾸고 켜고 끌 수 있어요
+          </p>
+
+          {sections.map((section, index) => {
+            const open = openSectionId === section.id;
+            return (
+              <div key={section.id} className="rounded-xl border border-stone-200 bg-white">
+                <div className="flex w-full items-center gap-2 px-3 py-3">
+                  {/* 순서변경 */}
+                  <div className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => moveSection(index, -1)}
+                      disabled={index === 0}
+                      aria-label="위로"
+                      className="px-1 text-stone-300 transition enabled:hover:text-stone-600 disabled:opacity-30"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveSection(index, 1)}
+                      disabled={index === sections.length - 1}
+                      aria-label="아래로"
+                      className="px-1 text-stone-300 transition enabled:hover:text-stone-600 disabled:opacity-30"
+                    >
+                      ▼
+                    </button>
+                  </div>
+
+                  {/* 온오프 스위치 */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={section.enabled}
+                    onClick={() => patchSection(section.id, { enabled: !section.enabled })}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                      section.enabled ? "bg-rose-400" : "bg-stone-200"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                        section.enabled ? "left-[1.375rem]" : "left-0.5"
+                      }`}
+                    />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOpenSectionId(open ? null : section.id)}
+                    className="flex flex-1 items-center justify-between text-left"
+                  >
+                    <span
+                      className={`font-medium ${section.enabled ? "text-stone-800" : "text-stone-400"}`}
+                    >
+                      {SECTION_TITLES[section.type]}
+                    </span>
+                    <Chevron open={open} />
+                  </button>
+                </div>
+                {open && (
+                  <div className="border-t border-stone-100 px-4 py-4">
+                    <SectionEditor
+                      section={section}
+                      labels={settings.labels}
+                      onChange={(data) => patchSection(section.id, { data })}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
@@ -417,7 +484,6 @@ export function InvitationEditor({
             </p>
           )}
 
-          {/* 고정 저장 바 */}
           <div className="sticky bottom-0 -mx-4 border-t border-stone-200 bg-stone-50/90 px-4 py-3 backdrop-blur">
             <button className="w-full rounded-lg bg-stone-800 py-3 font-medium text-white transition hover:bg-stone-900">
               저장
@@ -458,10 +524,7 @@ export function InvitationEditor({
                 ✕
               </button>
             </div>
-            <KakaoPostcodeEmbed
-              onComplete={handleAddressComplete}
-              style={{ height: 440 }}
-            />
+            <KakaoPostcodeEmbed onComplete={handleAddressComplete} style={{ height: 440 }} />
           </div>
         </div>
       )}

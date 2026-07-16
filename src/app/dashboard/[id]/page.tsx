@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { InvitationEditor } from "@/components/editor/InvitationEditor";
+import { parseContent } from "@/lib/sections";
 import type { Invitation } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -53,6 +54,7 @@ export default async function EditorPage({ params, searchParams }: EditorPagePro
 
       <InvitationEditor
         invitation={invitation}
+        content={parseContent(invitation.content, { greeting: invitation.greeting })}
         publicUrl={`${siteUrl}/i/${invitation.slug}`}
         error={error}
         saved={Boolean(saved)}

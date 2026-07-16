@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatWeddingAt } from "@/lib/datetime";
 import { InvitationView } from "@/components/invitation/InvitationView";
+import { parseContent } from "@/lib/sections";
 import type { Invitation } from "@/lib/types";
 
 interface PublicInvitationPageProps {
@@ -62,7 +63,18 @@ export default async function PublicInvitationPage({
 
   return (
     <main className="mx-auto min-h-dvh max-w-md bg-[#FDFBF7]">
-      <InvitationView invitation={invitation} />
+      <InvitationView
+        core={{
+          groomName: invitation.groom_name,
+          brideName: invitation.bride_name,
+          weddingAt: invitation.wedding_at,
+          venueName: invitation.venue_name,
+          venueAddress: invitation.venue_address,
+        }}
+        content={parseContent(invitation.content, {
+          greeting: invitation.greeting,
+        })}
+      />
     </main>
   );
 }

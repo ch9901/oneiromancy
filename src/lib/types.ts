@@ -34,6 +34,9 @@ export interface Invitation {
 
   features: InvitationFeatures;
 
+  /** 섹션 구조 (lib/sections.ts 의 parseContent 로 파싱해서 사용) */
+  content: unknown;
+
   created_at: string;
   updated_at: string;
 }

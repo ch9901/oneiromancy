@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { invitationSchema, slugErrorMessage } from "@/lib/invitation";
 import { toKstIso } from "@/lib/datetime";
+import { contentSchema } from "@/lib/sections";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -72,16 +73,35 @@ export async function updateInvitation(formData: FormData) {
     );
   }
 
+  // 섹션 구조(content) 파싱: 실패 시 저장하지 않는다
+  let contentRaw: unknown;
+  try {
+    contentRaw = JSON.parse(String(formData.get("content") ?? ""));
+  } catch {
+    redirect(
+      `/dashboard/${id}?error=${encodeURIComponent("섹션 데이터가 올바르지 않습니다. 새로고침 후 다시 시도해주세요.")}`,
+    );
+  }
+  const contentParsed = contentSchema.safeParse(contentRaw);
+  if (!contentParsed.success) {
+    redirect(
+      `/dashboard/${id}?error=${encodeURIComponent("섹션 내용이 너무 길거나 형식이 맞지 않습니다.")}`,
+    );
+  }
+  const content = contentParsed.data;
+
+  // 방명록/RSVP 의 RLS 게이트(features 컬럼)를 섹션 온오프와 동기화한다
+  const enabled = (type: "guestbook" | "rsvp") =>
+    content.sections.some((s) => s.type === type && s.enabled);
+
   const { wedding_at, ...fields } = parsed.data;
   const { error } = await supabase
     .from("invitations")
     .update({
       ...fields,
       wedding_at: toKstIso(wedding_at),
-      features: {
-        guestbook: formData.get("feature_guestbook") === "on",
-        rsvp: formData.get("feature_rsvp") === "on",
-      },
+      content,
+      features: { guestbook: enabled("guestbook"), rsvp: enabled("rsvp") },
     })
     .eq("id", id);
 
